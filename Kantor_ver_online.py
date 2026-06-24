@@ -5,13 +5,14 @@ import folium
 import numpy as np
 import json
 from flask import Flask, render_template_string
+import streamlit as st
 
 # 1. Inisialisasi Flask
 app = Flask(__name__)
 
 # Path relatif agar fleksibel saat dipindah ke server online
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-GEOJSON_PATH = os.path.join(BASE_DIR, "data", "PENANGANAN_KANTOR_BUPATI.geojson")
+GEOJSON_PATH = os.path.join(BASE_DIR, "PENANGANAN_KANTOR_BUPATI.geojson")
 
 # ==============================================================================
 # OPTIMALISASI: Membaca GeoJSON satu kali saja di awal agar Flask tidak macet
