@@ -57,6 +57,38 @@ st.markdown(
     div[data-testid="stDataFrame"] td, th {
         padding: 4px 8px !important;
     }
+    /* =========================================================================
+       PENGATURAN METRIK: Mengecilkan huruf & merapatkan spasi huruf-angka
+       ========================================================================= */
+    /* 1. Mengatur label metrik (huruf) */
+    [data-testid="stMetricLabel"] {
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+        margin-bottom: -10px !important; /* Menarik angka di bawahnya agar lebih rapat */
+    }
+    
+    /* 2. Mengatur wadah nilai metrik (angka) */
+    [data-testid="stMetricValue"] {
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+        line-height: 1.1 !important;     /* Merapatkan ruang vertikal teks angka */
+        padding-top: 0px !important;     /* Menghilangkan spasi kosong di atas angka */
+        margin-top: 0px !important;
+    }
+    
+    /* 3. Mengatur jarak delta (indikator persen kecil di bawah angka jika ada) */
+    [data-testid="stMetricDelta"] {
+        font-size: 0.8rem !important;
+        margin-top: -4px !important;     /* Menarik indikator delta ke atas agar rapat dengan angka */
+    }
+    
+    /* Mengecilkan ukuran huruf di dalam tabel data (st.dataframe) */
+    div[data-testid="stDataFrame"] table {
+        font-size: 0.8rem !important;
+    }
+    div[data-testid="stDataFrame"] td, th {
+        padding: 4px 8px !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
