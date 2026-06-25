@@ -15,6 +15,53 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# ------------------------------------------------------------------------------
+# KUSTOMISASI UKURAN HURUF (CSS INJECTION)
+# ------------------------------------------------------------------------------
+st.markdown(
+    """
+    <style>
+    /* Mengecilkan ukuran Judul Utama dan Keterangan */
+    h1 {
+        font-size: 1.8rem !important;
+        font-weight: 700 !important;
+    }
+    .stCaption {
+        font-size: 0.85rem !important;
+    }
+    
+    /* Mengecilkan ukuran Sub-header (Subjudul bagian) */
+    h3 {
+        font-size: 1.2rem !important;
+        font-weight: 600 !important;
+        margin-top: 10px !important;
+    }
+    
+    /* Mengecilkan komponen teks pada Kartu Metrik (Label & Angka) */
+    [data-testid="stMetricLabel"] {
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+    }
+    [data-testid="stMetricDelta"] {
+        font-size: 0.8rem !important;
+    }
+    
+    /* Mengecilkan ukuran huruf di dalam tabel data (st.dataframe) */
+    div[data-testid="stDataFrame"] table {
+        font-size: 0.8rem !important;
+    }
+    div[data-testid="stDataFrame"] td, th {
+        padding: 4px 8px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # Title & Subtitle Dashboard
 st.title("MONITORING PENANGANAN KAWASAN KANTOR BUPATI ACEH TAMIANG")
 st.caption("Konsultan MK - Penanganan Pasca Bencana Aceh")
@@ -74,7 +121,6 @@ with col_metric2:
     st.metric(label="✅ TOTAL REALISASI", value=f"{total_realisasi:,.2f} %")
 
 with col_metric3:
-    # Memberikan indikator warna pada deviasi kumulatif
     st.metric(
         label="📉 DEVIASI KUMULATIF", 
         value=f"{total_deviasi:,.2f} %", 
@@ -87,18 +133,15 @@ st.markdown("###")
 # ==============================================================================
 # 5. KOMPONEN VISUAL 2: PETA INTERAKTIF FOLIUM
 # ==============================================================================
-st.subheader("🗺️ Peta Interaktif Penanganan Kawasan")
+st.subheader("🗺️ Peta Interaktif Penanganan Kawasan Kantor Bupati Aceh Tamiang")
 
-# Gandakan data spasial & bersihkan string spasi kosong
 gdf_peta = GLOBAL_GDF.copy()
 gdf_peta['ITEM'] = gdf_peta['ITEM'].astype(str).str.strip()
 df_status_clean = df_rekap_raw.copy()
 df_status_clean['ITEM'] = df_status_clean['ITEM'].astype(str).str.strip()
 
-# Gabungkan kolom 'Status Pekerjaan' ke data spasial untuk pewarnaan poligon
 gdf_peta = gdf_peta.merge(df_status_clean[['ITEM', 'Status Pekerjaan']], on='ITEM', how='left')
 
-# Inisialisasi Basemaps kustom
 basemaps = {
     'OpenStreetMap': folium.TileLayer('openstreetmap', name='OpenStreetMap'),
     'Google Maps': folium.TileLayer(
@@ -115,12 +158,10 @@ basemaps = {
     )
 }
 
-# Centering peta ke wilayah Kantor Bupati Aceh Tamiang
 m = folium.Map(location=[4.3000, 98.0453], zoom_start=17, tiles=None, control_scale=True)
 for layer in basemaps.values():
     layer.add_to(m)
 
-# Fungsi pewarnaan poligon peta berdasarkan status pekerjaan
 def penentu_warna(feature):
     status = feature['properties'].get('Status Pekerjaan', '')
     if not status or pd.isna(status):
@@ -148,7 +189,6 @@ folium.GeoJson(
 
 folium.LayerControl().add_to(m)
 
-# Render peta Folium ke dalam UI Streamlit
 st_folium(m, width="100%", height=500, returned_objects=[])
 
 st.markdown("---")
@@ -161,7 +201,6 @@ col_kiri, col_kanan = st.columns([1, 1])
 with col_kiri:
     st.subheader("📋 Rekapitulasi Progress Kerja")
     
-    # Format penamaan kolom tabel untuk User Interface
     df_tabel = df_rekap_raw.rename(
         columns={
             'ITEM': 'Penanganan',
@@ -170,13 +209,11 @@ with col_kiri:
             'DEVIASI': 'Deviasi (%)'
         }
     )
-    # Tampilkan tabel interaktif yang bisa di-sorting dengan style bawaan Streamlit
     st.dataframe(df_tabel, use_container_width=True, hide_index=False)
 
 with col_kanan:
     st.subheader("📊 Grafik Perbandingan Progress (%)")
     
-    # Transformasi data agar sesuai dengan struktur visualisasi grafik Streamlit
     df_chart = df_rekap_raw.melt(
         id_vars=['ITEM'], 
         value_vars=['RENCANA', 'REALISASI'], 
@@ -184,7 +221,6 @@ with col_kanan:
         value_name='Persentase (%)'
     ).rename(columns={'ITEM': 'Item Pekerjaan'})
     
-    # Membuat Bar Chart berdampingan (Grouped Bar Chart) secara native
     st.bar_chart(
         data=df_chart,
         x="Item Pekerjaan",
