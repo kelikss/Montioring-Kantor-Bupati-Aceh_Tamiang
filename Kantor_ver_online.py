@@ -5,6 +5,8 @@ import folium
 import numpy as np
 import streamlit as st
 from streamlit_folium import st_folium
+from branca.element import MacroElement
+from jinja2 import Template
 
 # ==============================================================================
 # 1. KONFIGURASI HALAMAN STREAMLIT
@@ -129,6 +131,32 @@ with col_metric3:
     )
 
 st.markdown("###")
+
+# ==============================================================================
+# 5. KUSTOM ELEMEN: MEMBUAT KOTAK LEGENDA STATUS (HTML & JINJA2 TEMPLATE)
+# ==============================================================================
+class LegendaStatusProgres(MacroElement):
+    def __init__(self, title):
+        super(LegendaStatusProgres, self).__init__()
+        self._template = Template("""
+            {% macro html(this, kwargs) %}
+            <div id='maplegend' class='maplegend' 
+                style='position: absolute; z-index:9999; border: 2px solid grey; background-color:rgba(255, 255, 255, 0.9);
+                border-radius:6px; padding: 10px; font-size:12px; font-family: sans-serif; right: 20px; bottom: 20px;'>
+                
+                <div class='legend-title' style='font-weight: bold; margin-bottom: 5px;'>{{this.title}}</div>
+                <div class='legend-scale'>
+                  <ul class='legend-labels' style='list-style: none; padding: 0; margin: 0;'>
+                    <li style='margin-bottom: 3px;'><span style='display: inline-block; width: 25px; height: 15px; background:#28a745; opacity: 0.75; margin-right: 5px; border: 1px solid #1e7e34;'></span>Cepat (Ahead)</li>
+                    <li style='margin-bottom: 3px;'><span style='display: inline-block; width: 25px; height: 15px; background:#ffc107; opacity: 0.75; margin-right: 5px; border: 1px solid #d39e00;'></span>Tepat Waktu</li>
+                    <li style='margin-bottom: 3px;'><span style='display: inline-block; width: 25px; height: 15px; background:#dc3545; opacity: 0.75; margin-right: 5px; border: 1px solid #bd2130;'></span>Terlambat (Behind)</li>
+                    <li><span style='display: inline-block; width: 25px; height: 15px; background:#6c757d; opacity: 0.5; margin-right: 5px; border: 1px solid #495057;'></span>Tidak Diketahui</li>
+                  </ul>
+                </div>
+            </div>
+            {% endmacro %}
+        """)
+        self.title = title
 
 # ==============================================================================
 # 5. KOMPONEN VISUAL 2: PETA INTERAKTIF FOLIUM
