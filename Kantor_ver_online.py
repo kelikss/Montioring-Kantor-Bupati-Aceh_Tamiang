@@ -23,7 +23,6 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Mengecilkan ukuran Judul Utama dan Keterangan */
     h1 {
         font-size: 1.8rem !important;
         font-weight: 700 !important;
@@ -31,15 +30,11 @@ st.markdown(
     .stCaption {
         font-size: 0.85rem !important;
     }
-    
-    /* Mengecilkan ukuran Sub-header (Subjudul bagian) */
     h3 {
         font-size: 1.2rem !important;
         font-weight: 600 !important;
         margin-top: 10px !important;
     }
-    
-    /* Mengecilkan komponen teks pada Kartu Metrik (Label & Angka) */
     [data-testid="stMetricLabel"] {
         font-size: 0.8rem !important;
         font-weight: 600 !important;
@@ -48,11 +43,6 @@ st.markdown(
         font-size: 1.5rem !important;
         font-weight: 700 !important;
     }
-    [data-testid="stMetricDelta"] {
-        font-size: 0.8rem !important;
-    }
-    
-    /* Mengecilkan ukuran huruf di dalam tabel data (st.dataframe) */
     div[data-testid="stDataFrame"] table {
         font-size: 0.8rem !important;
     }
@@ -64,76 +54,89 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Title & Subtitle Dashboard
 st.title("MONITORING PENANGANAN KAWASAN KANTOR BUPATI ACEH TAMIANG")
 st.caption("Konsultan MK - Penanganan Pasca Bencana Aceh")
 st.markdown("---")
 
-# Path relatif file GeoJSON
+# Path File Spasial & Tabular
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 GEOJSON_PATH = os.path.join(BASE_DIR, "PENANGANAN_KANTOR_BUPATI.geojson")
+DATA_CFV_PATH = os.path.join(BASE_DIR, "DATA_PROGRESS.csv") 
 
 # ==============================================================================
-# 2. OPTIMALISASI: Membaca GeoJSON menggunakan Cache Streamlit
+# 2. CACHING DATA: Membaca GeoJSON & Data Tabular CFV
 # ==============================================================================
 @st.cache_data
-def muat_data_geojson(path):
+def muat_data_spasial(path):
     if os.path.exists(path):
-        return gpd.read_file(path)
+        gdf = gpd.read_file(path)
+        if 'KODE' in gdf.columns:
+            gdf['KODE'] = gdf['KODE'].astype(str).str.strip()
+        if 'ITEM' in gdf.columns:
+            gdf['ITEM'] = gdf['ITEM'].astype(str).str.strip()
+        return gdf
     else:
-        st.error(f"❌ File tidak ditemukan di: {path}. Tolong periksa nama file atau lokasi folder di GitHub Anda.")
+        st.error(f"❌ File GeoJSON tidak ditemukan di: {path}.")
         st.stop()
 
-GLOBAL_GDF = muat_data_geojson(GEOJSON_PATH)
+@st.cache_data
+def muat_data_tabular(path):
+    if os.path.exists(path):
+        df = pd.read_csv(path)
+        if 'KODE' in df.columns:
+            df['KODE'] = df['KODE'].astype(str).str.strip()
+        if 'ITEM' in df.columns:
+            df['ITEM'] = df['ITEM'].astype(str).str.strip()
+        return df
+    else:
+        st.warning(f"⚠️ File data tabular ({os.path.basename(path)}) tidak ditemukan. Membuat data simulasi sementara...")
+        data_simulasi = {
+            'KODE': ['K01', 'K02', 'K03'],
+            'ITEM': ['Pekerjaan Struktur', 'Pekerjaan Arsitektur', 'Pekerjaan Lansekap'],
+            'REALISASI': [42.5, 28.0, 30.0]
+        }
+        return pd.DataFrame(data_simulasi)
+
+# Memuat data asli/simulasi
+SPASIAL_GDF = muat_data_spasial(GEOJSON_PATH)
+TABULAR_DF = muat_data_tabular(DATA_CFV_PATH)
 
 # ==============================================================================
-# 3. HELPER: Fungsi Kalkulasi Rekapitulasi Progres & Status
+# 3. PENGGABUNGAN DATA (MERGE) & KLASIFIKASI KATEGORI REALISASI
 # ==============================================================================
-def hitung_rekap_dan_status(gdf_input):
-    # Proses rekapitulasi data per Item
-    df_rekap = gdf_input.groupby('ITEM')[['RENCANA', 'REALISASI', 'DEVIASI']].sum().reset_index()
-    
-    # Tentukan Kondisi Logika Klasifikasi Progres
-    kondisi = [
-        (df_rekap["DEVIASI"] > 0),   # Cepat
-        (df_rekap["DEVIASI"] == 0),  # Tepat Waktu
-        (df_rekap["DEVIASI"] < 0)    # Terlambat
-    ]
-    label = ["Cepat (Ahead)", "Tepat Waktu", "Terlambat (Behind)"]
-    df_rekap["Status Pekerjaan"] = np.select(kondisi, label, default="Tidak Diketahui")
-    
-    return df_rekap
+# Menentukan label visualisasi peta berdasarkan capaian progress realisasi saat ini
+kondisi = [
+    (TABULAR_DF["REALISASI"] >= 75.0),
+    (TABULAR_DF["REALISASI"] >= 40.0) & (TABULAR_DF["REALISASI"] < 75.0),
+    (TABULAR_DF["REALISASI"] > 0) & (TABULAR_DF["REALISASI"] < 40.0)
+]
+label = ["Progres Tinggi (>=75%)", "Progres Sedang (40-74%)", "Progres Rendah (<40%)"]
+TABULAR_DF["Status Pekerjaan"] = np.select(kondisi, label, default="Belum Dimulai / Selesai")
 
-# Proses kalkulasi awal data rekap
-df_rekap_raw = hitung_rekap_dan_status(GLOBAL_GDF)
+# Gabungkan data atribut spasial GeoJSON dengan Data Tabular Progres
+kolom_kunci = 'KODE' if 'KODE' in SPASIAL_GDF.columns and 'KODE' in TABULAR_DF.columns else 'ITEM'
+
+GLOBAL_GDF = SPASIAL_GDF.merge(TABULAR_DF, on=kolom_kunci, how='inner', suffixes=('', '_drop'))
+GLOBAL_GDF = GLOBAL_GDF.loc[:, ~GLOBAL_GDF.columns.str.endswith('_drop')]
+
+# Hitung ringkasan data untuk rekapitulasi tabel dan grafik
+df_rekap_raw = GLOBAL_GDF.groupby('ITEM')[['REALISASI']].sum().reset_index()
+df_rekap_raw = df_rekap_raw.merge(TABULAR_DF[['ITEM', 'Status Pekerjaan']].drop_duplicates(), on='ITEM', how='left')
 
 # ==============================================================================
-# 4. KOMPONEN VISUAL 1: KARTU METRIK TOTAL UTAMA
+# 4. KOMPONEN VISUAL 1: KARTU METRIK TOTAL REALISASI UTAMA
 # ==============================================================================
-total_rencana = df_rekap_raw['RENCANA'].sum() / 5
-total_realisasi = df_rekap_raw['REALISASI'].sum() / 5
-total_deviasi = total_realisasi - total_rencana
+total_realisasi = TABULAR_DF['REALISASI'].mean()  # Menggunakan rata-rata capaian kumulatif fisik kawasan
 
-col_metric1, col_metric2, col_metric3 = st.columns(3)
+col_metric1, col_metric2 = st.columns([1, 2])
 
 with col_metric1:
-    st.metric(label="📊 TOTAL RENCANA", value=f"{total_rencana:,.2f} %")
-
-with col_metric2:
-    st.metric(label="✅ TOTAL REALISASI", value=f"{total_realisasi:,.2f} %")
-
-with col_metric3:
-    st.metric(
-        label="📉 DEVIASI KUMULATIF", 
-        value=f"{total_deviasi:,.2f} %", 
-        delta=f"{total_deviasi:,.2f} %",
-        delta_color="normal" if total_deviasi >= 0 else "inverse"
-    )
+    st.metric(label="✅ RATA-RATA REALISASI FISIK KAWASAN", value=f"{total_realisasi:,.2f} %")
 
 st.markdown("###")
 
 # ==============================================================================
-# 5. KUSTOM ELEMEN: MEMBUAT KOTAK LEGENDA STATUS (HTML & JINJA2 TEMPLATE)
+# 5. KUSTOM ELEMEN: MEMBUAT KOTAK LEGENDA CAPAIAN (HTML & JINJA2 TEMPLATE)
 # ==============================================================================
 class LegendaStatusProgres(MacroElement):
     def __init__(self, title):
@@ -147,10 +150,10 @@ class LegendaStatusProgres(MacroElement):
                 <div class='legend-title' style='font-weight: bold; margin-bottom: 5px;'>{{this.title}}</div>
                 <div class='legend-scale'>
                   <ul class='legend-labels' style='list-style: none; padding: 0; margin: 0;'>
-                    <li style='margin-bottom: 3px;'><span style='display: inline-block; width: 25px; height: 15px; background:#28a745; opacity: 0.75; margin-right: 5px; border: 1px solid #1e7e34;'></span>Cepat (Ahead)</li>
-                    <li style='margin-bottom: 3px;'><span style='display: inline-block; width: 25px; height: 15px; background:#ffc107; opacity: 0.75; margin-right: 5px; border: 1px solid #d39e00;'></span>Tepat Waktu</li>
-                    <li style='margin-bottom: 3px;'><span style='display: inline-block; width: 25px; height: 15px; background:#dc3545; opacity: 0.75; margin-right: 5px; border: 1px solid #bd2130;'></span>Terlambat (Behind)</li>
-                    <li><span style='display: inline-block; width: 25px; height: 15px; background:#6c757d; opacity: 0.5; margin-right: 5px; border: 1px solid #495057;'></span>Tidak Diketahui</li>
+                    <li style='margin-bottom: 3px;'><span style='display: inline-block; width: 25px; height: 15px; background:#28a745; opacity: 0.75; margin-right: 5px; border: 1px solid #1e7e34;'></span>Progres Tinggi (>=75%)</li>
+                    <li style='margin-bottom: 3px;'><span style='display: inline-block; width: 25px; height: 15px; background:#ffc107; opacity: 0.75; margin-right: 5px; border: 1px solid #d39e00;'></span>Progres Sedang (40-74%)</li>
+                    <li style='margin-bottom: 3px;'><span style='display: inline-block; width: 25px; height: 15px; background:#dc3545; opacity: 0.75; margin-right: 5px; border: 1px solid #bd2130;'></span>Progres Rendah (<40%)</li>
+                    <li><span style='display: inline-block; width: 25px; height: 15px; background:#6c757d; opacity: 0.5; margin-right: 5px; border: 1px solid #495057;'></span>Belum Dimulai / Selesai</li>
                   </ul>
                 </div>
             </div>
@@ -159,16 +162,9 @@ class LegendaStatusProgres(MacroElement):
         self.title = title
 
 # ==============================================================================
-# 5. KOMPONEN VISUAL 2: PETA INTERAKTIF FOLIUM
+# 6. KOMPONEN VISUAL 2: PETA INTERAKTIF FOLIUM
 # ==============================================================================
 st.subheader("🗺️ Peta Interaktif Penanganan Kawasan Kantor Bupati Aceh Tamiang")
-
-gdf_peta = GLOBAL_GDF.copy()
-gdf_peta['ITEM'] = gdf_peta['ITEM'].astype(str).str.strip()
-df_status_clean = df_rekap_raw.copy()
-df_status_clean['ITEM'] = df_status_clean['ITEM'].astype(str).str.strip()
-
-gdf_peta = gdf_peta.merge(df_status_clean[['ITEM', 'Status Pekerjaan']], on='ITEM', how='left')
 
 basemaps = {
     'OpenStreetMap': folium.TileLayer('openstreetmap', name='OpenStreetMap'),
@@ -193,28 +189,29 @@ for layer in basemaps.values():
 def penentu_warna(feature):
     status = feature['properties'].get('Status Pekerjaan', '')
     if not status or pd.isna(status):
-        status = "Tidak Diketahui"
+        status = "Belum Dimulai / Selesai"
     
     status_lower = str(status).lower()
-    if "cepat" in status_lower or "ahead" in status_lower:
+    if "tinggi" in status_lower:
         return {'fillColor': '#28a745', 'color': '#1e7e34', 'fillOpacity': 0.6, 'weight': 2.5}
-    elif "tepat" in status_lower:
+    elif "sedang" in status_lower:
         return {'fillColor': '#ffc107', 'color': '#d39e00', 'fillOpacity': 0.6, 'weight': 2.5}
-    elif "terlambat" in status_lower or "behind" in status_lower:
+    elif "rendah" in status_lower:
         return {'fillColor': '#dc3545', 'color': '#bd2130', 'fillOpacity': 0.6, 'weight': 2.5}
     else:
         return {'fillColor': '#6c757d', 'color': '#495057', 'fillOpacity': 0.5, 'weight': 1.5}
 
 folium.GeoJson(
-    gdf_peta,
+    GLOBAL_GDF,
     name="Kawasan Penanganan",
     style_function=penentu_warna,
     tooltip=folium.GeoJsonTooltip(
-        fields=['KODE', 'ITEM', 'RENCANA', 'REALISASI', 'DEVIASI', 'Status Pekerjaan'],
-        aliases=['Kode:', 'Penanganan:', 'Rencana (%):', 'Realisasi (%):', 'Deviasi (%):', 'Status Progres:']
+        fields=['KODE', 'ITEM', 'REALISASI', 'Status Pekerjaan'],
+        aliases=['Kode:', 'Penanganan:', 'Realisasi (%):', 'Kategori Capaian:']
     )
 ).add_to(m)
 
+m.add_child(LegendaStatusProgres(title="Kategori Realisasi Fisik"))
 folium.LayerControl().add_to(m)
 
 st_folium(m, width="100%", height=500, returned_objects=[])
@@ -222,37 +219,28 @@ st_folium(m, width="100%", height=500, returned_objects=[])
 st.markdown("---")
 
 # ==============================================================================
-# 6. KOMPONEN VISUAL 3: TABEL REKAPITULASI & GRAFIK PROGRESS (Side-by-Side)
+# 7. KOMPONEN VISUAL 3: TABEL REKAPITULASI & GRAFIK PROGRESS (Side-by-Side)
 # ==============================================================================
 col_kiri, col_kanan = st.columns([1, 1])
 
 with col_kiri:
-    st.subheader("📋 Rekapitulasi Progress Kerja")
+    st.subheader("📋 Rekapitulasi Realisasi Kerja")
     
     df_tabel = df_rekap_raw.rename(
         columns={
             'ITEM': 'Penanganan',
-            'RENCANA': 'Rencana (%)',
             'REALISASI': 'Realisasi (%)',
-            'DEVIASI': 'Deviasi (%)'
+            'Status Pekerjaan': 'Kategori Capaian'
         }
     )
     st.dataframe(df_tabel, use_container_width=True, hide_index=False)
 
 with col_kanan:
-    st.subheader("📊 Grafik Perbandingan Progress (%)")
-    
-    df_chart = df_rekap_raw.melt(
-        id_vars=['ITEM'], 
-        value_vars=['RENCANA', 'REALISASI'], 
-        var_name='Tipe Progres', 
-        value_name='Persentase (%)'
-    ).rename(columns={'ITEM': 'Item Pekerjaan'})
+    st.subheader("📊 Grafik Progress Realisasi (%)")
     
     st.bar_chart(
-        data=df_chart,
-        x="Item Pekerjaan",
-        y="Persentase (%)",
-        color="Tipe Progres",
+        data=df_rekap_raw,
+        x="ITEM",
+        y="REALISASI",
         use_container_width=True
     )
