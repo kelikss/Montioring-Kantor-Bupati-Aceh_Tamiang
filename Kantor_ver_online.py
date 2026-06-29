@@ -111,7 +111,7 @@ kondisi = [
     (TABULAR_DF["REALISASI"] > 0) & (TABULAR_DF["REALISASI"] < 40.0)
 ]
 label = ["Progres Tinggi (>=75%)", "Progres Sedang (40-74%)", "Progres Rendah (<40%)"]
-TABULAR_DF["Status Pekerjaan"] = np.select(kondisi, label, default="Belum Dimulai / Selesai")
+TABULAR_DF["Status Pekerjaan"] = np.select(kondisi, label, default="Belum Dimulai")
 
 # Gabungkan data atribut spasial GeoJSON dengan Data Tabular Progres
 kolom_kunci = 'KODE' if 'KODE' in SPASIAL_GDF.columns and 'KODE' in TABULAR_DF.columns else 'ITEM'
