@@ -189,7 +189,7 @@ for layer in basemaps.values():
 def penentu_warna(feature):
     status = feature['properties'].get('Status Pekerjaan', '')
     if not status or pd.isna(status):
-        status = "Belum Dimulai / Selesai"
+        status = "Belum Dimulai"
     
     status_lower = str(status).lower()
     if "tinggi" in status_lower:
